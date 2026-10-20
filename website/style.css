@@ -1,0 +1,15 @@
+:root {
+    --bg: #172033;
+    --text: #F5F5F5;
+    --accent: #8B5CF6;
+    --surface: #253047;
+}
+
+body {
+    background-color: var(--bg);
+    color: var(--text);
+}
+
+button {
+    background-color: var(--accent);
+}
