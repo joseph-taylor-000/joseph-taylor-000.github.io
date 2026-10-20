@@ -9,7 +9,3 @@ body {
     background-color: var(--bg);
     color: var(--text);
 }
-
-button {
-    background-color: var(--accent);
-}
