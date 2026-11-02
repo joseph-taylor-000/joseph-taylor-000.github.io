@@ -12,6 +12,8 @@ const CONFIG = {
 
     // Rocket rotation
     rotationSpeed: 9,
+    svgRotationOffset: Math.PI / 2,
+
 
     // Rocket size
     rocketOffset: 25,
@@ -214,7 +216,7 @@ function updateRocket(dt) {
 
     rocket.style.transform = `
         translate(-50%, -50%)
-        rotate(${rocketState.angle}rad)
+        rotate(${rocketState.angle + CONFIG.svgRotationOffset}rad)
     `;
 
     rocket.style.left = `${rocketState.x}px`;
