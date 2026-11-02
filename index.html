@@ -7,6 +7,33 @@
   <title>My Website</title>
 </head>
 <body>
-  <h1 style = "text-align: center;">Joseph Taylor</h1>
+  <section class="rocket-banner" id="rocketBanner" aria-label="Interactive rocket banner">
+
+    <!-- Decorative SVG assets -->
+    <img src="icons/star.svg" class="banner-star star-one" alt="">
+    <img src="icons/star2.svg" class="banner-star star-two" alt="">
+    <img src="icons/star.svg" class="banner-star star-three" alt="">
+    <img src="icons/star_ring.svg" class="banner-star star-four" alt="">
+
+    <!-- Banner content -->
+    <div class="banner-content">
+        <span class="banner-eyebrow">Joseph Taylor</span>
+    </div>
+
+    <!-- Projectile rendering layer -->
+    <canvas class="rocket-canvas" id="rocketCanvas"></canvas>
+
+    <!-- Rocket -->
+    <img
+        src="icons/rocket.svg"
+        id="rocket"
+        class="rocket"
+        alt=""
+        draggable="false"
+    />
+
+</section>
 </body>
 </html>
+
+
