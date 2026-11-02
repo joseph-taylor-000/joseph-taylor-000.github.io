@@ -7,6 +7,10 @@ const ctx = canvas.getContext("2d");
 
 const CONFIG = {
 
+    // Momentum and inertia
+    coastDrag: 1.8,
+    minimumCoastSpeed: 5,
+    
     // Rocket movement
     followSpeed: 7,
 
@@ -148,27 +152,63 @@ function updateRocket(dt) {
     const previousX = rocketState.x;
     const previousY = rocketState.y;
 
-    // Time-based smoothing factor.
+    if (rocketState.pointerInside) {
 
-    const movementFactor =
-        1 - Math.exp(-CONFIG.followSpeed * dt);
+        const movementFactor =
+            1 - Math.exp(-CONFIG.followSpeed * dt);
 
-    // Move towards cursor.
+        rocketState.x +=
+            (rocketState.targetX - rocketState.x) * movementFactor;
 
-    rocketState.x +=
-        (rocketState.targetX - rocketState.x) * movementFactor;
-
-    rocketState.y +=
-        (rocketState.targetY - rocketState.y) * movementFactor;
+        rocketState.y +=
+            (rocketState.targetY - rocketState.y) * movementFactor;
 
 
-    // Calculate actual rocket velocity.
+        // Calculate actual movement velocity.
 
-    rocketState.vx = (rocketState.x - previousX) / dt;
-    rocketState.vy = (rocketState.y - previousY) / dt;
+        rocketState.vx =
+            (rocketState.x - previousX) / dt;
+
+        rocketState.vy =
+            (rocketState.y - previousY) / dt;
+
+    }
+
+    else {
+
+        // Continue moving using existing velocity.
+
+        rocketState.x += rocketState.vx * dt;
+
+        rocketState.y += rocketState.vy * dt;
 
 
-    // Determine direction of movement.
+        // Apply exponential friction.
+
+        const friction = Math.exp(
+            -CONFIG.coastDrag * dt
+        );
+
+        rocketState.vx *= friction;
+
+        rocketState.vy *= friction;
+
+
+        // Stop when momentum becomes negligible.
+
+        const speed = Math.hypot(
+            rocketState.vx,
+            rocketState.vy
+        );
+
+        if (speed < CONFIG.minimumCoastSpeed) {
+
+            rocketState.vx = 0;
+            rocketState.vy = 0;
+
+        }
+
+    }
 
     const speed = Math.hypot(
         rocketState.vx,
@@ -177,30 +217,18 @@ function updateRocket(dt) {
 
     let targetAngle = rocketState.angle;
 
-    if (speed > 12) {
+
+    if (speed > 5) {
+
+        // Face the direction of actual movement.
 
         targetAngle = Math.atan2(
             rocketState.vy,
             rocketState.vx
         );
 
-    } else {
-
-        // When nearly stationary, face towards cursor.
-
-        const dx = rocketState.targetX - rocketState.x;
-        const dy = rocketState.targetY - rocketState.y;
-
-        if (Math.hypot(dx, dy) > 2) {
-
-            targetAngle = Math.atan2(dy, dx);
-
-        }
-
     }
 
-
-    // Smooth rocket rotation.
 
     const rotationFactor =
         1 - Math.exp(-CONFIG.rotationSpeed * dt);
@@ -211,19 +239,16 @@ function updateRocket(dt) {
         rotationFactor
     );
 
+    rocket.style.left = `${rocketState.x}px`;
 
-    // Render rocket.
+    rocket.style.top = `${rocketState.y}px`;
 
     rocket.style.transform = `
         translate(-50%, -50%)
         rotate(${rocketState.angle + CONFIG.svgRotationOffset}rad)
     `;
 
-    rocket.style.left = `${rocketState.x}px`;
-    rocket.style.top = `${rocketState.y}px`;
-
 }
-
 
 
 function fireProjectiles() {
