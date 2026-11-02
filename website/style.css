@@ -9,3 +9,244 @@ body {
     background-color: var(--bg);
     color: var(--text);
 }
+
+.rocket-banner {
+    position: relative;
+
+    width: 100%;
+    height: 280px;
+
+    overflow: hidden;
+
+    background:
+        radial-gradient(
+            ellipse at 50% 120%,
+            #172c4d 0%,
+            #0b1426 65%,
+            #080e1b 100%
+        );
+
+    border: 1px solid rgba(91, 175, 255, 0.45);
+
+    border-radius: 14px;
+
+    cursor: crosshair;
+
+    isolation: isolate;
+
+    user-select: none;
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+/* Subtle glowing border */
+
+.rocket-banner:hover {
+    border-color: rgba(83, 203, 255, 0.8);
+
+    box-shadow:
+        0 0 15px rgba(46, 169, 255, 0.12),
+        inset 0 0 20px rgba(46, 169, 255, 0.04);
+}
+
+
+.banner-content {
+    position: absolute;
+
+    top: 50%;
+    left: 7%;
+
+    transform: translateY(-50%);
+
+    z-index: 2;
+
+    pointer-events: none;
+
+    color: white;
+}
+
+.banner-eyebrow {
+    display: block;
+
+    color: #69caff;
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    letter-spacing: 3px;
+
+    margin-bottom: 12px;
+}
+
+.banner-content h2 {
+    font-size: clamp(26px, 4vw, 42px);
+
+    font-weight: 700;
+
+    margin: 0 0 10px;
+
+    letter-spacing: -1px;
+}
+
+.banner-content p {
+    font-size: 14px;
+
+    color: #9aacc8;
+
+    margin: 0 0 18px;
+}
+
+.banner-hint {
+    display: inline-block;
+
+    font-size: 10px;
+
+    letter-spacing: 2px;
+
+    color: #66d6ff;
+
+    border: 1px solid rgba(102, 214, 255, 0.4);
+
+    padding: 7px 12px;
+
+    border-radius: 4px;
+}
+
+.banner-star {
+    position: absolute;
+
+    pointer-events: none;
+
+    opacity: 0.5;
+
+    z-index: 0;
+}
+
+.star-one {
+    width: 20px;
+    top: 20%;
+    right: 18%;
+    animation: starFloat 5s ease-in-out infinite;
+}
+
+.star-two {
+    width: 14px;
+    top: 70%;
+    right: 35%;
+    animation: starFloat 7s ease-in-out infinite reverse;
+}
+
+.star-three {
+    width: 10px;
+    top: 25%;
+    right: 48%;
+    animation: starFloat 6s ease-in-out infinite;
+}
+
+.star-four {
+    width: 65px;
+    top: 15%;
+    right: 7%;
+    opacity: 0.18;
+    animation: starRotate 25s linear infinite;
+}
+
+@keyframes starFloat {
+    0%, 100% {
+        transform: translateY(0);
+        opacity: 0.35;
+    }
+
+    50% {
+        transform: translateY(-8px);
+        opacity: 0.8;
+    }
+}
+
+@keyframes starRotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.rocket-canvas {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    z-index: 3;
+
+    pointer-events: none;
+}
+
+.rocket {
+    position: absolute;
+
+    width: 52px;
+    height: 52px;
+
+    left: 50%;
+    top: 50%;
+
+    object-fit: contain;
+
+    z-index: 4;
+
+    pointer-events: none;
+
+    user-select: none;
+
+    will-change: transform;
+
+    transform-origin: center center;
+
+    filter:
+        drop-shadow(0 0 5px rgba(77, 201, 255, 0.5))
+        drop-shadow(0 0 12px rgba(77, 201, 255, 0.2));
+}
+
+@media (max-width: 600px) {
+
+    .rocket-banner {
+        height: 230px;
+    }
+
+    .banner-content {
+        left: 6%;
+    }
+
+    .banner-content h2 {
+        font-size: 26px;
+    }
+
+    .rocket {
+        width: 42px;
+        height: 42px;
+    }
+
+    .star-four {
+        width: 45px;
+    }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+
+    .banner-star {
+        animation: none;
+    }
+
+    .rocket-banner {
+        transition: none;
+    }
+}
