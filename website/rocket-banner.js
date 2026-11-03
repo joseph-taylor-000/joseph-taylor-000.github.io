@@ -1,50 +1,64 @@
+
+/* =========================================
+   ROCKET BANNER SYSTEM
+   Complete JavaScript implementation
+========================================= */
+
 const banner = document.getElementById("rocketBanner");
 const rocket = document.getElementById("rocket");
 const canvas = document.getElementById("rocketCanvas");
 
+if (!banner || !rocket || !canvas) {
+    throw new Error("Rocket banner: required HTML elements not found.");
+}
+
 const ctx = canvas.getContext("2d");
 
 
+/* =========================================
+   CONFIGURATION
+========================================= */
+
 const CONFIG = {
 
-    // Momentum and inertia
-    coastDrag: 1.8,
-    minimumCoastSpeed: 5,
-    
     // Rocket movement
     followSpeed: 7,
 
-    // Rocket rotation
+    // Rotation
     rotationSpeed: 9,
+
+    // SVG points UP by default
     svgRotationOffset: Math.PI / 2,
 
-
-    // Rocket size
+    // Rocket nose distance from centre
     rocketOffset: 25,
 
-    // Projectile settings
+    // Momentum
+    coastDrag: 1.8,
+    minimumCoastSpeed: 5,
+
+    // Projectiles
     projectileSpeed: 550,
     projectileLength: 17,
     projectileWidth: 3,
-
-    // Firing spread
     spreadAngle: 0.10,
-
-    // Number of projectiles per click
     burstCount: 3,
-
-    // Maximum projectile bounces
     maxBounces: 6,
-
-    // Projectile lifetime
     projectileLifetime: 5,
+    maxProjectiles: 80,
 
-    // Particle settings
+    // Impact particles
     impactParticles: 8,
+    maxParticles: 250,
 
-    // Maximum active projectiles
-    maxProjectiles: 80
+    // Border effects
+    borderFlashDecay: 5
 };
+
+
+/* =========================================
+   CANVAS SETUP
+========================================= */
 
 let width = 0;
 let height = 0;
@@ -57,18 +71,18 @@ function resizeCanvas() {
     width = rect.width;
     height = rect.height;
 
-    pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    pixelRatio = Math.min(
+        window.devicePixelRatio || 1,
+        2
+    );
 
     canvas.width = Math.round(width * pixelRatio);
     canvas.height = Math.round(height * pixelRatio);
 
     ctx.setTransform(
-        pixelRatio,
-        0,
-        0,
-        pixelRatio,
-        0,
-        0
+        pixelRatio, 0,
+        0, pixelRatio,
+        0, 0
     );
 }
 
@@ -77,6 +91,11 @@ const resizeObserver = new ResizeObserver(resizeCanvas);
 resizeObserver.observe(banner);
 
 resizeCanvas();
+
+
+/* =========================================
+   ROCKET STATE
+========================================= */
 
 const rocketState = {
 
@@ -92,7 +111,13 @@ const rocketState = {
     targetY: height * 0.5,
 
     pointerInside: false
+
 };
+
+
+/* =========================================
+   POINTER INPUT
+========================================= */
 
 banner.addEventListener("pointerenter", () => {
 
@@ -110,17 +135,34 @@ banner.addEventListener("pointermove", (event) => {
 
     const rect = banner.getBoundingClientRect();
 
+    rocketState.pointerInside = true;
+
     rocketState.targetX = event.clientX - rect.left;
     rocketState.targetY = event.clientY - rect.top;
 
 });
 
-const projectiles = [];
 
+/* =========================================
+   SIMULATION STORAGE
+========================================= */
+
+const projectiles = [];
 const particles = [];
 
+const borderFlash = {
 
-// Get the shortest angular difference.
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0
+
+};
+
+
+/* =========================================
+   ANGLE UTILITIES
+========================================= */
 
 function angleDifference(target, current) {
 
@@ -138,19 +180,29 @@ function angleDifference(target, current) {
 }
 
 
-// Smoothly interpolate an angle.
-
 function smoothAngle(current, target, factor) {
 
-    return current + angleDifference(target, current) * factor;
+    return current +
+        angleDifference(target, current) * factor;
 
 }
 
 
+/* =========================================
+   ROCKET MOVEMENT
+========================================= */
+
 function updateRocket(dt) {
+
+    if (dt <= 0) return;
 
     const previousX = rocketState.x;
     const previousY = rocketState.y;
+
+
+    // -------------------------------------
+    // FOLLOW CURSOR
+    // -------------------------------------
 
     if (rocketState.pointerInside) {
 
@@ -158,13 +210,15 @@ function updateRocket(dt) {
             1 - Math.exp(-CONFIG.followSpeed * dt);
 
         rocketState.x +=
-            (rocketState.targetX - rocketState.x) * movementFactor;
+            (rocketState.targetX - rocketState.x)
+            * movementFactor;
 
         rocketState.y +=
-            (rocketState.targetY - rocketState.y) * movementFactor;
+            (rocketState.targetY - rocketState.y)
+            * movementFactor;
 
 
-        // Calculate actual movement velocity.
+        // Calculate actual rocket velocity.
 
         rocketState.vx =
             (rocketState.x - previousX) / dt;
@@ -174,27 +228,30 @@ function updateRocket(dt) {
 
     }
 
+
+    // -------------------------------------
+    // MOMENTUM WHEN CURSOR LEAVES
+    // -------------------------------------
+
     else {
 
-        // Continue moving using existing velocity.
+        // Continue travelling.
 
         rocketState.x += rocketState.vx * dt;
-
         rocketState.y += rocketState.vy * dt;
 
 
-        // Apply exponential friction.
+        // Gradually reduce velocity.
 
         const friction = Math.exp(
             -CONFIG.coastDrag * dt
         );
 
         rocketState.vx *= friction;
-
         rocketState.vy *= friction;
 
 
-        // Stop when momentum becomes negligible.
+        // Stop when almost stationary.
 
         const speed = Math.hypot(
             rocketState.vx,
@@ -210,25 +267,50 @@ function updateRocket(dt) {
 
     }
 
-    const speed = Math.hypot(
-        rocketState.vx,
-        rocketState.vy
-    );
+
+    // -------------------------------------
+    // ROTATION
+    // -------------------------------------
 
     let targetAngle = rocketState.angle;
 
+    if (rocketState.pointerInside) {
 
-    if (speed > 5) {
+        // Face cursor while following it.
 
-        // Face the direction of actual movement.
+        const dx = rocketState.targetX - rocketState.x;
+        const dy = rocketState.targetY - rocketState.y;
 
-        targetAngle = Math.atan2(
-            rocketState.vy,
-            rocketState.vx
-        );
+        if (Math.hypot(dx, dy) > 3) {
+
+            targetAngle = Math.atan2(dy, dx);
+
+        }
 
     }
 
+    else {
+
+        // Face direction of travel while coasting.
+
+        const speed = Math.hypot(
+            rocketState.vx,
+            rocketState.vy
+        );
+
+        if (speed > 5) {
+
+            targetAngle = Math.atan2(
+                rocketState.vy,
+                rocketState.vx
+            );
+
+        }
+
+    }
+
+
+    // Smooth rotation.
 
     const rotationFactor =
         1 - Math.exp(-CONFIG.rotationSpeed * dt);
@@ -239,8 +321,12 @@ function updateRocket(dt) {
         rotationFactor
     );
 
-    rocket.style.left = `${rocketState.x}px`;
 
+    // -------------------------------------
+    // RENDER ROCKET
+    // -------------------------------------
+
+    rocket.style.left = `${rocketState.x}px`;
     rocket.style.top = `${rocketState.y}px`;
 
     rocket.style.transform = `
@@ -251,15 +337,21 @@ function updateRocket(dt) {
 }
 
 
+/* =========================================
+   FIRE PROJECTILES
+========================================= */
+
 function fireProjectiles() {
 
-    if (projectiles.length >= CONFIG.maxProjectiles) {
+    if (
+        projectiles.length >= CONFIG.maxProjectiles
+    ) {
         return;
     }
 
     const angle = rocketState.angle;
 
-    // Spawn position: rocket nose.
+    // Calculate rocket nose position.
 
     const spawnX =
         rocketState.x +
@@ -270,11 +362,13 @@ function fireProjectiles() {
         Math.sin(angle) * CONFIG.rocketOffset;
 
 
-    // Fire a spread of bolts.
+    // Create projectile burst.
 
     for (let i = 0; i < CONFIG.burstCount; i++) {
 
-        if (projectiles.length >= CONFIG.maxProjectiles) {
+        if (
+            projectiles.length >= CONFIG.maxProjectiles
+        ) {
             break;
         }
 
@@ -295,9 +389,7 @@ function fireProjectiles() {
             vy: Math.sin(shotAngle) * speed,
 
             age: 0,
-
             bounces: 0,
-
             alive: true
 
         });
@@ -307,7 +399,7 @@ function fireProjectiles() {
 }
 
 
-// Clicking fires.
+// Click to fire.
 
 banner.addEventListener("click", () => {
 
@@ -315,11 +407,75 @@ banner.addEventListener("click", () => {
 
 });
 
+
+/* =========================================
+   PROJECTILE COLLISION EFFECTS
+========================================= */
+
+function createImpact(x, y, wall) {
+
+    // Create sparks.
+
+    for (
+        let i = 0;
+        i < CONFIG.impactParticles;
+        i++
+    ) {
+
+        if (particles.length >= CONFIG.maxParticles) {
+            break;
+        }
+
+        const angle = Math.random() * Math.PI * 2;
+
+        const speed = 50 + Math.random() * 140;
+
+        const life = 0.35 + Math.random() * 0.3;
+
+        particles.push({
+
+            x,
+            y,
+
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+
+            life,
+            maxLife: life,
+
+            size: 1 + Math.random() * 2
+
+        });
+
+    }
+
+
+    // Identify impacted border.
+
+    const side = wall === "horizontal"
+
+        ? (x < width / 2 ? "left" : "right")
+
+        : (y < height / 2 ? "top" : "bottom");
+
+
+    // Trigger border flash.
+
+    borderFlash[side] = 1;
+
+}
+
+
+/* =========================================
+   UPDATE PROJECTILES
+========================================= */
+
 function updateProjectiles(dt) {
 
     for (const bolt of projectiles) {
 
         if (!bolt.alive) continue;
+
 
         // Move projectile.
 
@@ -329,48 +485,61 @@ function updateProjectiles(dt) {
         bolt.age += dt;
 
 
-        // Lifetime check.
+        // Lifetime.
 
         if (bolt.age >= CONFIG.projectileLifetime) {
 
             bolt.alive = false;
-
             continue;
 
         }
 
 
-        // Check left/right collision.
+        // LEFT / RIGHT WALLS.
 
         if (bolt.x <= 2 || bolt.x >= width - 2) {
 
             bolt.vx *= -1;
 
-            bolt.x = Math.max(2, Math.min(width - 2, bolt.x));
+            bolt.x = Math.max(
+                2,
+                Math.min(width - 2, bolt.x)
+            );
 
             bolt.bounces++;
 
-            createImpact(bolt.x, bolt.y, "horizontal");
+            createImpact(
+                bolt.x,
+                bolt.y,
+                "horizontal"
+            );
 
         }
 
 
-        // Check top/bottom collision.
+        // TOP / BOTTOM WALLS.
 
         if (bolt.y <= 2 || bolt.y >= height - 2) {
 
             bolt.vy *= -1;
 
-            bolt.y = Math.max(2, Math.min(height - 2, bolt.y));
+            bolt.y = Math.max(
+                2,
+                Math.min(height - 2, bolt.y)
+            );
 
             bolt.bounces++;
 
-            createImpact(bolt.x, bolt.y, "vertical");
+            createImpact(
+                bolt.x,
+                bolt.y,
+                "vertical"
+            );
 
         }
 
 
-        // Remove after too many bounces.
+        // Remove after maximum bounces.
 
         if (bolt.bounces >= CONFIG.maxBounces) {
 
@@ -395,18 +564,29 @@ function updateProjectiles(dt) {
 
 }
 
+
+/* =========================================
+   DRAW PROJECTILES
+========================================= */
+
 function drawProjectiles() {
 
     for (const bolt of projectiles) {
 
         if (!bolt.alive) continue;
 
-        const angle = Math.atan2(bolt.vy, bolt.vx);
+        const angle = Math.atan2(
+            bolt.vy,
+            bolt.vx
+        );
 
         const length = CONFIG.projectileLength;
 
-        const tailX = bolt.x - Math.cos(angle) * length;
-        const tailY = bolt.y - Math.sin(angle) * length;
+        const tailX =
+            bolt.x - Math.cos(angle) * length;
+
+        const tailY =
+            bolt.y - Math.sin(angle) * length;
 
 
         ctx.save();
@@ -423,10 +603,8 @@ function drawProjectiles() {
         ctx.lineWidth = 7;
 
         ctx.beginPath();
-
         ctx.moveTo(tailX, tailY);
         ctx.lineTo(bolt.x, bolt.y);
-
         ctx.stroke();
 
 
@@ -437,10 +615,8 @@ function drawProjectiles() {
         ctx.lineWidth = CONFIG.projectileWidth;
 
         ctx.beginPath();
-
         ctx.moveTo(tailX, tailY);
         ctx.lineTo(bolt.x, bolt.y);
-
         ctx.stroke();
 
 
@@ -451,12 +627,9 @@ function drawProjectiles() {
         ctx.lineWidth = 1;
 
         ctx.beginPath();
-
         ctx.moveTo(tailX, tailY);
         ctx.lineTo(bolt.x, bolt.y);
-
         ctx.stroke();
-
 
         ctx.restore();
 
@@ -464,55 +637,10 @@ function drawProjectiles() {
 
 }
 
-function createImpact(x, y, wall) {
 
-    for (let i = 0; i < CONFIG.impactParticles; i++) {
-
-        const angle = Math.random() * Math.PI * 2;
-
-        const speed = 50 + Math.random() * 140;
-
-        particles.push({
-
-            x,
-            y,
-
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-
-            life: 0.35 + Math.random() * 0.3,
-
-            maxLife: 0.65,
-
-            size: 1 + Math.random() * 2
-
-        });
-
-    }
-
-
-    // Trigger a border flash.
-
-    const side =
-        wall === "horizontal"
-            ? (x < width / 2 ? "left" : "right")
-            : (y < height / 2 ? "top" : "bottom");
-
-    banner.style.setProperty(
-        "--impact-" + side,
-        "1"
-    );
-
-    setTimeout(() => {
-
-        banner.style.setProperty(
-            "--impact-" + side,
-            "0"
-        );
-
-    }, 100);
-
-}
+/* =========================================
+   UPDATE PARTICLES
+========================================= */
 
 function updateParticles(dt) {
 
@@ -525,8 +653,10 @@ function updateParticles(dt) {
 
         // Friction.
 
-        particle.vx *= Math.exp(-3 * dt);
-        particle.vy *= Math.exp(-3 * dt);
+        const friction = Math.exp(-3 * dt);
+
+        particle.vx *= friction;
+        particle.vy *= friction;
 
     }
 
@@ -544,6 +674,11 @@ function updateParticles(dt) {
     }
 
 }
+
+
+/* =========================================
+   DRAW PARTICLES
+========================================= */
 
 function drawParticles() {
 
@@ -581,28 +716,72 @@ function drawParticles() {
 
 }
 
+
+/* =========================================
+   UPDATE BORDER FLASHES
+========================================= */
+
+function updateBorderFlash(dt) {
+
+    const decay = Math.exp(
+        -CONFIG.borderFlashDecay * dt
+    );
+
+    for (const side in borderFlash) {
+
+        borderFlash[side] *= decay;
+
+        if (borderFlash[side] < 0.01) {
+            borderFlash[side] = 0;
+        }
+
+    }
+
+}
+
+
+/* =========================================
+   DRAW BORDER GLOW
+========================================= */
+
 function drawBorderGlow() {
 
-    const style = getComputedStyle(banner);
-
     const sides = [
+
         {
-            value: parseFloat(style.getPropertyValue("--impact-top")) || 0,
-            x: 0, y: 0, w: width, h: 2
+            value: borderFlash.top,
+            x: 0,
+            y: 0,
+            w: width,
+            h: 2
         },
+
         {
-            value: parseFloat(style.getPropertyValue("--impact-bottom")) || 0,
-            x: 0, y: height - 2, w: width, h: 2
+            value: borderFlash.bottom,
+            x: 0,
+            y: height - 2,
+            w: width,
+            h: 2
         },
+
         {
-            value: parseFloat(style.getPropertyValue("--impact-left")) || 0,
-            x: 0, y: 0, w: 2, h: height
+            value: borderFlash.left,
+            x: 0,
+            y: 0,
+            w: 2,
+            h: height
         },
+
         {
-            value: parseFloat(style.getPropertyValue("--impact-right")) || 0,
-            x: width - 2, y: 0, w: 2, h: height
+            value: borderFlash.right,
+            x: width - 2,
+            y: 0,
+            w: 2,
+            h: height
         }
+
     ];
+
 
     for (const side of sides) {
 
@@ -630,9 +809,16 @@ function drawBorderGlow() {
 
 }
 
+
+/* =========================================
+   MAIN ANIMATION LOOP
+========================================= */
+
 let previousTime = 0;
 
 function animate(timestamp) {
+
+    // Calculate elapsed time.
 
     const dt = Math.min(
         (timestamp - previousTime) / 1000 || 0,
@@ -642,22 +828,28 @@ function animate(timestamp) {
     previousTime = timestamp;
 
 
-    // Clear previous frame.
+    // Clear canvas.
 
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(
+        0,
+        0,
+        width,
+        height
+    );
 
 
-    // Update simulation.
+    // Update all simulation systems.
+
     updateRocket(dt);
-
-
 
     updateProjectiles(dt);
 
     updateParticles(dt);
 
+    updateBorderFlash(dt);
 
-    // Draw simulation.
+
+    // Render all effects.
 
     drawProjectiles();
 
@@ -666,11 +858,26 @@ function animate(timestamp) {
     drawBorderGlow();
 
 
-    // Continue animation.
+    // Next frame.
 
     requestAnimationFrame(animate);
 
 }
+
+
+/* =========================================
+   INITIALISE
+========================================= */
+
+// Position rocket in centre.
+
+rocket.style.left = `${rocketState.x}px`;
+rocket.style.top = `${rocketState.y}px`;
+
+rocket.style.transform = `
+    translate(-50%, -50%)
+    rotate(${CONFIG.svgRotationOffset}rad)
+`;
 
 
 // Start animation.
