@@ -648,12 +648,9 @@ function animate(timestamp) {
 
 
     // Update simulation.
+    updateRocket(dt);
 
-    if (rocketState.pointerInside) {
 
-        updateRocket(dt);
-
-    }
 
     updateProjectiles(dt);
 
