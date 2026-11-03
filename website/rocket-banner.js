@@ -22,7 +22,7 @@ const ctx = canvas.getContext("2d");
 const CONFIG = {
 
     // Rocket movement
-    followSpeed: 7,
+    followSpeed: 4,
 
     // Rotation
     rotationSpeed: 9,
@@ -34,8 +34,8 @@ const CONFIG = {
     rocketOffset: 25,
 
     // Momentum
-    coastDrag: 1.8,
-    minimumCoastSpeed: 5,
+    coastDrag: 0.9,
+    minimumCoastSpeed: 2,
 
     // Projectiles
     projectileSpeed: 550,
@@ -110,16 +110,63 @@ const rocketState = {
     targetX: width * 0.5,
     targetY: height * 0.5,
 
-    pointerInside: false
+    pointerInside: false,
+
+    // Track actual cursor velocity
+    pointerVX: 0,
+    pointerVY: 0,
+
+    lastPointerX: 0,
+    lastPointerY: 0,
+    lastPointerTime: 0
 
 };
 
 
 /* =========================================
-   POINTER INPUT
+   POINTER INPUT AND VELOCITY TRACKING
 ========================================= */
 
-banner.addEventListener("pointerenter", () => {
+banner.addEventListener("pointerenter", (event) => {
+
+    rocketState.pointerInside = true;
+
+});
+
+banner.addEventListener("pointermove", (event) => {
+
+    const rect = banner.getBoundingClientRect();
+
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    const currentTime = event.timeStamp;
+
+    // Calculate cursor velocity.
+
+    if (rocketState.lastPointerTime > 0) {
+
+        const elapsed =
+            (currentTime - rocketState.lastPointerTime) / 1000;
+
+        if (elapsed > 0.001) {
+
+            rocketState.pointerVX =
+                (x - rocketState.lastPointerX) / elapsed;
+
+            rocketState.pointerVY =
+                (y - rocketState.lastPointerY) / elapsed;
+
+        }
+
+    }
+
+    rocketState.targetX = x;
+    rocketState.targetY = y;
+
+    rocketState.lastPointerX = x;
+    rocketState.lastPointerY = y;
+    rocketState.lastPointerTime = currentTime;
 
     rocketState.pointerInside = true;
 
@@ -129,16 +176,12 @@ banner.addEventListener("pointerleave", () => {
 
     rocketState.pointerInside = false;
 
-});
+    // Transfer cursor momentum to the rocket.
 
-banner.addEventListener("pointermove", (event) => {
+    rocketState.vx = rocketState.pointerVX;
+    rocketState.vy = rocketState.pointerVY;
 
-    const rect = banner.getBoundingClientRect();
-
-    rocketState.pointerInside = true;
-
-    rocketState.targetX = event.clientX - rect.left;
-    rocketState.targetY = event.clientY - rect.top;
+    rocketState.lastPointerTime = 0;
 
 });
 
@@ -196,13 +239,9 @@ function updateRocket(dt) {
 
     if (dt <= 0) return;
 
-    const previousX = rocketState.x;
-    const previousY = rocketState.y;
-
-
-    // -------------------------------------
-    // FOLLOW CURSOR
-    // -------------------------------------
+    // =====================================
+    // MOVEMENT
+    // =====================================
 
     if (rocketState.pointerInside) {
 
@@ -210,55 +249,41 @@ function updateRocket(dt) {
             1 - Math.exp(-CONFIG.followSpeed * dt);
 
         rocketState.x +=
-            (rocketState.targetX - rocketState.x)
-            * movementFactor;
+            (rocketState.targetX - rocketState.x) * movementFactor;
 
         rocketState.y +=
-            (rocketState.targetY - rocketState.y)
-            * movementFactor;
+            (rocketState.targetY - rocketState.y) * movementFactor;
 
-
-        // Calculate actual rocket velocity.
+        // Track rocket's actual movement.
 
         rocketState.vx =
-            (rocketState.x - previousX) / dt;
+            (rocketState.x - (rocketState.x - rocketState.vx * dt)) / dt;
 
         rocketState.vy =
-            (rocketState.y - previousY) / dt;
+            (rocketState.y - (rocketState.y - rocketState.vy * dt)) / dt;
 
     }
 
-
-    // -------------------------------------
-    // MOMENTUM WHEN CURSOR LEAVES
-    // -------------------------------------
-
     else {
 
-        // Continue travelling.
+        // Continue travelling using transferred momentum.
 
         rocketState.x += rocketState.vx * dt;
         rocketState.y += rocketState.vy * dt;
 
+        // Apply space-like friction.
 
-        // Gradually reduce velocity.
-
-        const friction = Math.exp(
-            -CONFIG.coastDrag * dt
-        );
+        const friction = Math.exp(-CONFIG.coastDrag * dt);
 
         rocketState.vx *= friction;
         rocketState.vy *= friction;
 
+        // Stop only when almost stationary.
 
-        // Stop when almost stationary.
-
-        const speed = Math.hypot(
-            rocketState.vx,
-            rocketState.vy
-        );
-
-        if (speed < CONFIG.minimumCoastSpeed) {
+        if (
+            Math.hypot(rocketState.vx, rocketState.vy) <
+            CONFIG.minimumCoastSpeed
+        ) {
 
             rocketState.vx = 0;
             rocketState.vy = 0;
@@ -268,15 +293,13 @@ function updateRocket(dt) {
     }
 
 
-    // -------------------------------------
+    // =====================================
     // ROTATION
-    // -------------------------------------
+    // =====================================
 
     let targetAngle = rocketState.angle;
 
     if (rocketState.pointerInside) {
-
-        // Face cursor while following it.
 
         const dx = rocketState.targetX - rocketState.x;
         const dy = rocketState.targetY - rocketState.y;
@@ -290,8 +313,6 @@ function updateRocket(dt) {
     }
 
     else {
-
-        // Face direction of travel while coasting.
 
         const speed = Math.hypot(
             rocketState.vx,
@@ -322,9 +343,9 @@ function updateRocket(dt) {
     );
 
 
-    // -------------------------------------
-    // RENDER ROCKET
-    // -------------------------------------
+    // =====================================
+    // RENDER
+    // =====================================
 
     rocket.style.left = `${rocketState.x}px`;
     rocket.style.top = `${rocketState.y}px`;
