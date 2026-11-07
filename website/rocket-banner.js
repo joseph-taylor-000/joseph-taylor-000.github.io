@@ -31,7 +31,7 @@ const CONFIG = {
     svgRotationOffset: Math.PI / 2,
 
     // Rocket nose distance from centre
-    rocketOffset: 25,
+    rocketOffset: 100,
 
     // Momentum
     coastDrag: 0.9,
