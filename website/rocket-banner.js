@@ -1,7 +1,7 @@
 
 /* =========================================
    ROCKET BANNER SYSTEM
-   Complete JavaScript implementation
+   Nose-anchored cursor tracking
 ========================================= */
 
 const banner = document.getElementById("rocketBanner");
@@ -22,7 +22,7 @@ const ctx = canvas.getContext("2d");
 const CONFIG = {
 
     // Rocket movement
-    followSpeed: 3,
+    followSpeed: 4,
 
     // Rotation
     rotationSpeed: 9,
@@ -30,10 +30,9 @@ const CONFIG = {
     // SVG points UP by default
     svgRotationOffset: Math.PI / 2,
 
-    // Rocket nose distance from centre
-    rocketOffset: 40,
-    rocketOffsetx: 40,
-    rocketOffsety: 50,
+    // Actual distance from rocket centre to visible nose.
+    // Adjust this if the SVG has transparent padding.
+    noseLength: 102,
 
     // Momentum
     coastDrag: 0.9,
@@ -81,6 +80,9 @@ function resizeCanvas() {
     canvas.width = Math.round(width * pixelRatio);
     canvas.height = Math.round(height * pixelRatio);
 
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
     ctx.setTransform(
         pixelRatio, 0,
         0, pixelRatio,
@@ -89,7 +91,6 @@ function resizeCanvas() {
 }
 
 const resizeObserver = new ResizeObserver(resizeCanvas);
-
 resizeObserver.observe(banner);
 
 resizeCanvas();
@@ -101,20 +102,24 @@ resizeCanvas();
 
 const rocketState = {
 
+    // Centre position of the rocket
     x: width * 0.5,
     y: height * 0.5,
 
     vx: 0,
     vy: 0,
 
-    angle: 0,
+    // Direction the rocket faces.
+    // Movement angle: 0 = right, PI/2 = down.
+    angle: -Math.PI / 2,
 
+    // Cursor position = desired NOSE position
     targetX: width * 0.5,
     targetY: height * 0.5,
 
     pointerInside: false,
 
-    // Track actual cursor velocity
+    // Cursor velocity for momentum
     pointerVX: 0,
     pointerVY: 0,
 
@@ -126,16 +131,10 @@ const rocketState = {
 
 
 /* =========================================
-   POINTER INPUT AND VELOCITY TRACKING
+   POINTER INPUT
 ========================================= */
 
-banner.addEventListener("pointerenter", (event) => {
-
-    rocketState.pointerInside = true;
-
-});
-
-banner.addEventListener("pointermove", (event) => {
+function setPointerPosition(event) {
 
     const rect = banner.getBoundingClientRect();
 
@@ -144,8 +143,6 @@ banner.addEventListener("pointermove", (event) => {
 
     const currentTime = event.timeStamp;
 
-    // Calculate cursor velocity.
-
     if (rocketState.lastPointerTime > 0) {
 
         const elapsed =
@@ -153,14 +150,23 @@ banner.addEventListener("pointermove", (event) => {
 
         if (elapsed > 0.001) {
 
-            rocketState.pointerVX =
+            const rawVX =
                 (x - rocketState.lastPointerX) / elapsed;
 
-            rocketState.pointerVY =
+            const rawVY =
                 (y - rocketState.lastPointerY) / elapsed;
 
-        }
+            // Smooth and limit cursor velocity.
+            const maxSpeed = 1400;
 
+            rocketState.pointerVX =
+                rocketState.pointerVX * 0.65 +
+                Math.max(-maxSpeed, Math.min(maxSpeed, rawVX)) * 0.35;
+
+            rocketState.pointerVY =
+                rocketState.pointerVY * 0.65 +
+                Math.max(-maxSpeed, Math.min(maxSpeed, rawVY)) * 0.35;
+        }
     }
 
     rocketState.targetX = x;
@@ -171,19 +177,27 @@ banner.addEventListener("pointermove", (event) => {
     rocketState.lastPointerTime = currentTime;
 
     rocketState.pointerInside = true;
+}
+
+banner.addEventListener("pointerenter", (event) => {
+
+    setPointerPosition(event);
 
 });
+
+banner.addEventListener("pointermove", setPointerPosition);
 
 banner.addEventListener("pointerleave", () => {
 
     rocketState.pointerInside = false;
 
     // Transfer cursor momentum to the rocket.
-
     rocketState.vx = rocketState.pointerVX;
     rocketState.vy = rocketState.pointerVY;
 
     rocketState.lastPointerTime = 0;
+    rocketState.pointerVX = 0;
+    rocketState.pointerVY = 0;
 
 });
 
@@ -196,12 +210,10 @@ const projectiles = [];
 const particles = [];
 
 const borderFlash = {
-
     top: 0,
     bottom: 0,
     left: 0,
     right: 0
-
 };
 
 
@@ -224,12 +236,32 @@ function angleDifference(target, current) {
     return difference;
 }
 
-
 function smoothAngle(current, target, factor) {
 
     return current +
         angleDifference(target, current) * factor;
+}
 
+
+/* =========================================
+   ROCKET GEOMETRY
+========================================= */
+
+// Get the position of the rocket's nose
+// from its centre and rotation.
+
+function getRocketNose() {
+
+    const displayAngle =
+        rocketState.angle + CONFIG.svgRotationOffset;
+
+    return {
+        x: rocketState.x +
+            Math.cos(displayAngle) * CONFIG.noseLength,
+
+        y: rocketState.y +
+            Math.sin(displayAngle) * CONFIG.noseLength
+    };
 }
 
 
@@ -241,81 +273,77 @@ function updateRocket(dt) {
 
     if (dt <= 0) return;
 
-    // =====================================
-    // MOVEMENT
-    // =====================================
+    const oldX = rocketState.x;
+    const oldY = rocketState.y;
 
     if (rocketState.pointerInside) {
 
+        // First calculate the direction from the rocket's
+        // current centre towards the cursor.
+        const dx = rocketState.targetX - rocketState.x;
+        const dy = rocketState.targetY - rocketState.y;
+
+        // The desired nose direction.
+        const desiredAngle = Math.atan2(dy, dx);
+
+        // Rotate smoothly towards the cursor.
+        const rotationFactor =
+            1 - Math.exp(-CONFIG.rotationSpeed * dt);
+
+        rocketState.angle = smoothAngle(
+            rocketState.angle,
+            desiredAngle,
+            rotationFactor
+        );
+
+        // Calculate where the centre needs to be
+        // so that the nose reaches the cursor.
+        const displayAngle =
+            rocketState.angle + CONFIG.svgRotationOffset;
+
+        const desiredCentreX =
+            rocketState.targetX -
+            Math.cos(displayAngle) * CONFIG.noseLength;
+
+        const desiredCentreY =
+            rocketState.targetY -
+            Math.sin(displayAngle) * CONFIG.noseLength;
+
+        // Smoothly move the rocket centre towards that position.
         const movementFactor =
             1 - Math.exp(-CONFIG.followSpeed * dt);
 
         rocketState.x +=
-            (rocketState.targetX - rocketState.x) * movementFactor;
+            (desiredCentreX - rocketState.x) * movementFactor;
 
         rocketState.y +=
-            (rocketState.targetY - rocketState.y) * movementFactor;
+            (desiredCentreY - rocketState.y) * movementFactor;
 
-        // Track rocket's actual movement.
+        // Actual rocket velocity.
+        rocketState.vx = (rocketState.x - oldX) / dt;
+        rocketState.vy = (rocketState.y - oldY) / dt;
 
-        rocketState.vx =
-            (rocketState.x - (rocketState.x - rocketState.vx * dt)) / dt;
+    } else {
 
-        rocketState.vy =
-            (rocketState.y - (rocketState.y - rocketState.vy * dt)) / dt;
-
-    }
-
-    else {
-
-        // Continue travelling using transferred momentum.
-
+        // Continue travelling with momentum.
         rocketState.x += rocketState.vx * dt;
         rocketState.y += rocketState.vy * dt;
 
-        // Apply space-like friction.
-
+        // Gradual space-like friction.
         const friction = Math.exp(-CONFIG.coastDrag * dt);
 
         rocketState.vx *= friction;
         rocketState.vy *= friction;
 
-        // Stop only when almost stationary.
-
         if (
             Math.hypot(rocketState.vx, rocketState.vy) <
             CONFIG.minimumCoastSpeed
         ) {
-
             rocketState.vx = 0;
             rocketState.vy = 0;
-
         }
 
-    }
-
-
-    // =====================================
-    // ROTATION
-    // =====================================
-
-    let targetAngle = rocketState.angle;
-
-    if (rocketState.pointerInside) {
-
-        const dx = rocketState.targetX - rocketState.x;
-        const dy = rocketState.targetY - rocketState.y;
-
-        if (Math.hypot(dx, dy) > 3) {
-
-            targetAngle = Math.atan2(dy, dx);
-
-        }
-
-    }
-
-    else {
-
+        // Face direction of travel when coasting.
         const speed = Math.hypot(
             rocketState.vx,
             rocketState.vy
@@ -323,32 +351,36 @@ function updateRocket(dt) {
 
         if (speed > 5) {
 
-            targetAngle = Math.atan2(
+            const targetAngle = Math.atan2(
                 rocketState.vy,
                 rocketState.vx
             );
 
-        }
+            const rotationFactor =
+                1 - Math.exp(-CONFIG.rotationSpeed * dt);
 
+            rocketState.angle = smoothAngle(
+                rocketState.angle,
+                targetAngle,
+                rotationFactor
+            );
+        }
     }
 
+    // Keep the rocket within the banner.
+    const margin = CONFIG.noseLength;
 
-    // Smooth rotation.
-
-    const rotationFactor =
-        1 - Math.exp(-CONFIG.rotationSpeed * dt);
-
-    rocketState.angle = smoothAngle(
-        rocketState.angle,
-        targetAngle,
-        rotationFactor
+    rocketState.x = Math.max(
+        -margin,
+        Math.min(width + margin, rocketState.x)
     );
 
+    rocketState.y = Math.max(
+        -margin,
+        Math.min(height + margin, rocketState.y)
+    );
 
-    // =====================================
-    // RENDER
-    // =====================================
-
+    // Render rocket.
     rocket.style.left = `${rocketState.x}px`;
     rocket.style.top = `${rocketState.y}px`;
 
@@ -356,7 +388,6 @@ function updateRocket(dt) {
         translate(-50%, -50%)
         rotate(${rocketState.angle + CONFIG.svgRotationOffset}rad)
     `;
-
 }
 
 
@@ -366,32 +397,18 @@ function updateRocket(dt) {
 
 function fireProjectiles() {
 
-    if (
-        projectiles.length >= CONFIG.maxProjectiles
-    ) {
+    if (projectiles.length >= CONFIG.maxProjectiles) {
         return;
     }
 
+    // Spawn directly at the calculated rocket nose.
+    const nose = getRocketNose();
+
     const angle = rocketState.angle;
-
-    // Calculate rocket nose position.
-
-    const spawnX =
-        rocketState.x +
-        Math.cos(angle) * CONFIG.rocketOffsetx;
-
-    const spawnY =
-        rocketState.y +
-        Math.sin(angle) * CONFIG.rocketOffsety;
-
-
-    // Create projectile burst.
 
     for (let i = 0; i < CONFIG.burstCount; i++) {
 
-        if (
-            projectiles.length >= CONFIG.maxProjectiles
-        ) {
+        if (projectiles.length >= CONFIG.maxProjectiles) {
             break;
         }
 
@@ -401,34 +418,25 @@ function fireProjectiles() {
 
         const shotAngle = angle + spread;
 
-        const speed = CONFIG.projectileSpeed;
-
         projectiles.push({
 
-            x: spawnX,
-            y: spawnY,
+            x: nose.x,
+            y: nose.y,
 
-            vx: Math.cos(shotAngle) * speed,
-            vy: Math.sin(shotAngle) * speed,
+            vx: Math.cos(shotAngle) * CONFIG.projectileSpeed,
+            vy: Math.sin(shotAngle) * CONFIG.projectileSpeed,
 
             age: 0,
             bounces: 0,
             alive: true
 
         });
-
     }
-
 }
 
 
 // Click to fire.
-
-banner.addEventListener("click", () => {
-
-    fireProjectiles();
-
-});
+banner.addEventListener("click", fireProjectiles);
 
 
 /* =========================================
@@ -436,8 +444,6 @@ banner.addEventListener("click", () => {
 ========================================= */
 
 function createImpact(x, y, wall) {
-
-    // Create sparks.
 
     for (
         let i = 0;
@@ -450,9 +456,7 @@ function createImpact(x, y, wall) {
         }
 
         const angle = Math.random() * Math.PI * 2;
-
         const speed = 50 + Math.random() * 140;
-
         const life = 0.35 + Math.random() * 0.3;
 
         particles.push({
@@ -469,23 +473,13 @@ function createImpact(x, y, wall) {
             size: 1 + Math.random() * 2
 
         });
-
     }
 
-
-    // Identify impacted border.
-
     const side = wall === "horizontal"
-
         ? (x < width / 2 ? "left" : "right")
-
         : (y < height / 2 ? "top" : "bottom");
 
-
-    // Trigger border flash.
-
     borderFlash[side] = 1;
-
 }
 
 
@@ -499,27 +493,17 @@ function updateProjectiles(dt) {
 
         if (!bolt.alive) continue;
 
-
-        // Move projectile.
-
         bolt.x += bolt.vx * dt;
         bolt.y += bolt.vy * dt;
 
         bolt.age += dt;
 
-
-        // Lifetime.
-
         if (bolt.age >= CONFIG.projectileLifetime) {
-
             bolt.alive = false;
             continue;
-
         }
 
-
-        // LEFT / RIGHT WALLS.
-
+        // LEFT / RIGHT WALLS
         if (bolt.x <= 2 || bolt.x >= width - 2) {
 
             bolt.vx *= -1;
@@ -536,12 +520,9 @@ function updateProjectiles(dt) {
                 bolt.y,
                 "horizontal"
             );
-
         }
 
-
-        // TOP / BOTTOM WALLS.
-
+        // TOP / BOTTOM WALLS
         if (bolt.y <= 2 || bolt.y >= height - 2) {
 
             bolt.vy *= -1;
@@ -558,33 +539,19 @@ function updateProjectiles(dt) {
                 bolt.y,
                 "vertical"
             );
-
         }
-
-
-        // Remove after maximum bounces.
 
         if (bolt.bounces >= CONFIG.maxBounces) {
-
             bolt.alive = false;
-
         }
-
     }
-
-
-    // Remove dead projectiles.
 
     for (let i = projectiles.length - 1; i >= 0; i--) {
 
         if (!projectiles[i].alive) {
-
             projectiles.splice(i, 1);
-
         }
-
     }
-
 }
 
 
@@ -611,14 +578,11 @@ function drawProjectiles() {
         const tailY =
             bolt.y - Math.sin(angle) * length;
 
-
         ctx.save();
 
         ctx.lineCap = "round";
 
-
         // Outer glow.
-
         ctx.shadowBlur = 14;
         ctx.shadowColor = "#43cfff";
 
@@ -630,9 +594,7 @@ function drawProjectiles() {
         ctx.lineTo(bolt.x, bolt.y);
         ctx.stroke();
 
-
         // Main laser.
-
         ctx.shadowBlur = 8;
         ctx.strokeStyle = "#49d8ff";
         ctx.lineWidth = CONFIG.projectileWidth;
@@ -642,9 +604,7 @@ function drawProjectiles() {
         ctx.lineTo(bolt.x, bolt.y);
         ctx.stroke();
 
-
         // Bright centre.
-
         ctx.shadowBlur = 4;
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1;
@@ -655,9 +615,7 @@ function drawProjectiles() {
         ctx.stroke();
 
         ctx.restore();
-
     }
-
 }
 
 
@@ -674,28 +632,18 @@ function updateParticles(dt) {
 
         particle.life -= dt;
 
-        // Friction.
-
         const friction = Math.exp(-3 * dt);
 
         particle.vx *= friction;
         particle.vy *= friction;
-
     }
-
-
-    // Remove expired particles.
 
     for (let i = particles.length - 1; i >= 0; i--) {
 
         if (particles[i].life <= 0) {
-
             particles.splice(i, 1);
-
         }
-
     }
-
 }
 
 
@@ -715,7 +663,6 @@ function drawParticles() {
         ctx.save();
 
         ctx.globalAlpha = opacity;
-
         ctx.fillStyle = "#75ddff";
 
         ctx.shadowBlur = 10;
@@ -732,11 +679,8 @@ function drawParticles() {
         );
 
         ctx.fill();
-
         ctx.restore();
-
     }
-
 }
 
 
@@ -757,9 +701,7 @@ function updateBorderFlash(dt) {
         if (borderFlash[side] < 0.01) {
             borderFlash[side] = 0;
         }
-
     }
-
 }
 
 
@@ -805,7 +747,6 @@ function drawBorderGlow() {
 
     ];
 
-
     for (const side of sides) {
 
         if (side.value <= 0) continue;
@@ -827,9 +768,7 @@ function drawBorderGlow() {
         );
 
         ctx.restore();
-
     }
-
 }
 
 
@@ -841,17 +780,12 @@ let previousTime = 0;
 
 function animate(timestamp) {
 
-    // Calculate elapsed time.
-
     const dt = Math.min(
         (timestamp - previousTime) / 1000 || 0,
         0.033
     );
 
     previousTime = timestamp;
-
-
-    // Clear canvas.
 
     ctx.clearRect(
         0,
@@ -860,31 +794,17 @@ function animate(timestamp) {
         height
     );
 
-
-    // Update all simulation systems.
-
     updateRocket(dt);
 
     updateProjectiles(dt);
-
     updateParticles(dt);
-
     updateBorderFlash(dt);
 
-
-    // Render all effects.
-
     drawProjectiles();
-
     drawParticles();
-
     drawBorderGlow();
 
-
-    // Next frame.
-
     requestAnimationFrame(animate);
-
 }
 
 
@@ -892,17 +812,14 @@ function animate(timestamp) {
    INITIALISE
 ========================================= */
 
-// Position rocket in centre.
-
+// Position rocket.
 rocket.style.left = `${rocketState.x}px`;
 rocket.style.top = `${rocketState.y}px`;
 
 rocket.style.transform = `
     translate(-50%, -50%)
-    rotate(${CONFIG.svgRotationOffset}rad)
+    rotate(${rocketState.angle + CONFIG.svgRotationOffset}rad)
 `;
 
-
 // Start animation.
-
 requestAnimationFrame(animate);
