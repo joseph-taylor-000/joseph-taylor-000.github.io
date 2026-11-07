@@ -32,8 +32,8 @@ const CONFIG = {
 
     // Rocket nose distance from centre
     rocketOffset: 40,
-    rocketOffsetx: -100,
-    rocketOffsety: 100,
+    rocketOffsetx: 40,
+    rocketOffsety: -50,
 
     // Momentum
     coastDrag: 0.9,
