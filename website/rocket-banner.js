@@ -32,7 +32,7 @@ const CONFIG = {
 
     // Distance from rocket centre to visible nose.
     // Adjust this to match your SVG artwork.
-    noseLength: 85,
+    noseLength: 10,
 
     // Momentum
     coastDrag: 0.9,
