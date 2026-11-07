@@ -236,84 +236,125 @@ function smoothAngle(current, target, factor) {
 ========================================= */
 
 function updateRocket(dt) {
-  if (rocketState.pointerInside) {
-    const oldX = rocketState.x;
-    const oldY = rocketState.y;
 
-    // Smoothly follow the cursor with a little lag.
-    const easing = 1 - Math.exp(-CONFIG.followSpeed * dt);
+    if (dt <= 0) return;
 
-    rocketState.x +=
-      (rocketState.targetX - rocketState.x) * easing;
+    // =====================================
+    // MOVEMENT
+    // =====================================
 
-    rocketState.y +=
-      (rocketState.targetY - rocketState.y) * easing;
+    if (rocketState.pointerInside) {
 
-    // Preserve movement momentum.
-    rocketState.vx = (rocketState.x - oldX) / dt;
-    rocketState.vy = (rocketState.y - oldY) / dt;
+        const movementFactor =
+            1 - Math.exp(-CONFIG.followSpeed * dt);
 
-    // Aim directly at the cursor, not the direction of travel.
-    const desiredAngle = Math.atan2(
-      rocketState.targetY - rocketState.y,
-      rocketState.targetX - rocketState.x
+        rocketState.x +=
+            (rocketState.targetX - rocketState.x) * movementFactor;
+
+        rocketState.y +=
+            (rocketState.targetY - rocketState.y) * movementFactor;
+
+        // Track rocket's actual movement.
+
+        rocketState.vx =
+            (rocketState.x - (rocketState.x - rocketState.vx * dt)) / dt;
+
+        rocketState.vy =
+            (rocketState.y - (rocketState.y - rocketState.vy * dt)) / dt;
+
+    }
+
+    else {
+
+        // Continue travelling using transferred momentum.
+
+        rocketState.x += rocketState.vx * dt;
+        rocketState.y += rocketState.vy * dt;
+
+        // Apply space-like friction.
+
+        const friction = Math.exp(-CONFIG.coastDrag * dt);
+
+        rocketState.vx *= friction;
+        rocketState.vy *= friction;
+
+        // Stop only when almost stationary.
+
+        if (
+            Math.hypot(rocketState.vx, rocketState.vy) <
+            CONFIG.minimumCoastSpeed
+        ) {
+
+            rocketState.vx = 0;
+            rocketState.vy = 0;
+
+        }
+
+    }
+
+
+    // =====================================
+    // ROTATION
+    // =====================================
+
+    let targetAngle = rocketState.angle;
+
+    if (rocketState.pointerInside) {
+
+        const dx = rocketState.targetX - rocketState.x;
+        const dy = rocketState.targetY - rocketState.y;
+
+        if (Math.hypot(dx, dy) > 3) {
+
+            targetAngle = Math.atan2(dy, dx);
+
+        }
+
+    }
+
+    else {
+
+        const speed = Math.hypot(
+            rocketState.vx,
+            rocketState.vy
+        );
+
+        if (speed > 5) {
+
+            targetAngle = Math.atan2(
+                rocketState.vy,
+                rocketState.vx
+            );
+
+        }
+
+    }
+
+
+    // Smooth rotation.
+
+    const rotationFactor =
+        1 - Math.exp(-CONFIG.rotationSpeed * dt);
+
+    rocketState.angle = smoothAngle(
+        rocketState.angle,
+        targetAngle,
+        rotationFactor
     );
 
-    rocketState.angle = desiredAngle;
 
-  } else {
-    // Continue coasting when the cursor leaves.
-    rocketState.x += rocketState.vx * dt;
-    rocketState.y += rocketState.vy * dt;
+    // =====================================
+    // RENDER
+    // =====================================
 
-    const drag = Math.exp(-CONFIG.coastDrag * dt);
+    rocket.style.left = `${rocketState.x}px`;
+    rocket.style.top = `${rocketState.y}px`;
 
-    rocketState.vx *= drag;
-    rocketState.vy *= drag;
+    rocket.style.transform = `
+        translate(-50%, -50%)
+        rotate(${rocketState.angle + CONFIG.svgRotationOffset}rad)
+    `;
 
-    if (
-      Math.abs(rocketState.vx) < 2 &&
-      Math.abs(rocketState.vy) < 2
-    ) {
-      rocketState.vx = 0;
-      rocketState.vy = 0;
-    }
-
-    // Face the direction of travel while coasting.
-    if (Math.abs(rocketState.vx) + Math.abs(rocketState.vy) > 1) {
-      const desiredAngle = Math.atan2(
-        rocketState.vy,
-        rocketState.vx
-      );
-
-      rocketState.angle = smoothAngle(
-        rocketState.angle,
-        desiredAngle,
-        CONFIG.rotationSpeed,
-        dt
-      );
-    }
-  }
-
-  // Keep rocket inside banner.
-  const margin = 20;
-
-  rocketState.x = Math.max(
-    margin,
-    Math.min(width - margin, rocketState.x)
-  );
-
-  rocketState.y = Math.max(
-    margin,
-    Math.min(height - margin, rocketState.y)
-  );
-
-  // Render rocket.
-  rocket.style.left = `${rocketState.x}px`;
-  rocket.style.top = `${rocketState.y}px`;
-
-  rocket.style.transform =
-    `translate(-50%, -50%) rotate(${rocketState.angle + CONFIG.svgRotationOffset}rad)`;
 }
 
 
