@@ -38,7 +38,7 @@ const CONFIG = {
     minimumCoastSpeed: 2,
 
     // Projectiles
-    projectileSpeed: 550,
+    projectileSpeed: 1000,
     projectileLength: 5,
     projectileWidth: 2,
     spreadAngle: 0.10,
