@@ -31,7 +31,9 @@ const CONFIG = {
     svgRotationOffset: Math.PI / 2,
 
     // Rocket nose distance from centre
-    rocketOffset: 100,
+    rocketOffset: 40,
+    rocketOffsetx: 20,
+    rocketOffsety: 200,
 
     // Momentum
     coastDrag: 0.9,
@@ -376,11 +378,11 @@ function fireProjectiles() {
 
     const spawnX =
         rocketState.x +
-        Math.cos(angle) * CONFIG.rocketOffset;
+        Math.cos(angle) * CONFIG.rocketOffsetx;
 
     const spawnY =
         rocketState.y +
-        Math.sin(angle) * CONFIG.rocketOffset;
+        Math.sin(angle) * CONFIG.rocketOffsety;
 
 
     // Create projectile burst.
