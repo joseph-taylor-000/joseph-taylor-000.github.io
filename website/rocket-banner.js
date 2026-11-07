@@ -22,7 +22,7 @@ const ctx = canvas.getContext("2d");
 const CONFIG = {
 
     // Rocket movement
-    followSpeed: 4,
+    followSpeed: 3,
 
     // Rotation
     rotationSpeed: 9,
@@ -33,7 +33,7 @@ const CONFIG = {
     // Rocket nose distance from centre
     rocketOffset: 40,
     rocketOffsetx: 40,
-    rocketOffsety: -50,
+    rocketOffsety: 50,
 
     // Momentum
     coastDrag: 0.9,
