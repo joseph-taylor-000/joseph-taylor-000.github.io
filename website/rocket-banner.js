@@ -30,9 +30,9 @@ const CONFIG = {
     // SVG points UP by default
     svgRotationOffset: Math.PI / 2,
 
-    // Actual distance from rocket centre to visible nose.
-    // Adjust this if the SVG has transparent padding.
-    noseLength: 102,
+    // Distance from rocket centre to visible nose.
+    // Adjust this to match your SVG artwork.
+    noseLength: 85,
 
     // Momentum
     coastDrag: 0.9,
@@ -102,18 +102,17 @@ resizeCanvas();
 
 const rocketState = {
 
-    // Centre position of the rocket
+    // Rocket centre position
     x: width * 0.5,
     y: height * 0.5,
 
     vx: 0,
     vy: 0,
 
-    // Direction the rocket faces.
-    // Movement angle: 0 = right, PI/2 = down.
+    // Movement angle: 0 = right, PI/2 = down
     angle: -Math.PI / 2,
 
-    // Cursor position = desired NOSE position
+    // Cursor position
     targetX: width * 0.5,
     targetY: height * 0.5,
 
@@ -126,7 +125,6 @@ const rocketState = {
     lastPointerX: 0,
     lastPointerY: 0,
     lastPointerTime: 0
-
 };
 
 
@@ -159,13 +157,23 @@ function setPointerPosition(event) {
             // Smooth and limit cursor velocity.
             const maxSpeed = 1400;
 
+            const limitedVX = Math.max(
+                -maxSpeed,
+                Math.min(maxSpeed, rawVX)
+            );
+
+            const limitedVY = Math.max(
+                -maxSpeed,
+                Math.min(maxSpeed, rawVY)
+            );
+
             rocketState.pointerVX =
                 rocketState.pointerVX * 0.65 +
-                Math.max(-maxSpeed, Math.min(maxSpeed, rawVX)) * 0.35;
+                limitedVX * 0.35;
 
             rocketState.pointerVY =
                 rocketState.pointerVY * 0.65 +
-                Math.max(-maxSpeed, Math.min(maxSpeed, rawVY)) * 0.35;
+                limitedVY * 0.35;
         }
     }
 
@@ -179,12 +187,7 @@ function setPointerPosition(event) {
     rocketState.pointerInside = true;
 }
 
-banner.addEventListener("pointerenter", (event) => {
-
-    setPointerPosition(event);
-
-});
-
+banner.addEventListener("pointerenter", setPointerPosition);
 banner.addEventListener("pointermove", setPointerPosition);
 
 banner.addEventListener("pointerleave", () => {
@@ -198,7 +201,6 @@ banner.addEventListener("pointerleave", () => {
     rocketState.lastPointerTime = 0;
     rocketState.pointerVX = 0;
     rocketState.pointerVY = 0;
-
 });
 
 
@@ -247,20 +249,18 @@ function smoothAngle(current, target, factor) {
    ROCKET GEOMETRY
 ========================================= */
 
-// Get the position of the rocket's nose
-// from its centre and rotation.
+// Calculate the visible nose position.
+// rocketState.angle already represents the direction
+// the rocket points in screen coordinates.
 
 function getRocketNose() {
 
-    const displayAngle =
-        rocketState.angle + CONFIG.svgRotationOffset;
-
     return {
         x: rocketState.x +
-            Math.cos(displayAngle) * CONFIG.noseLength,
+            Math.cos(rocketState.angle) * CONFIG.noseLength,
 
         y: rocketState.y +
-            Math.sin(displayAngle) * CONFIG.noseLength
+            Math.sin(rocketState.angle) * CONFIG.noseLength
     };
 }
 
@@ -273,63 +273,64 @@ function updateRocket(dt) {
 
     if (dt <= 0) return;
 
-    const oldX = rocketState.x;
-    const oldY = rocketState.y;
-
     if (rocketState.pointerInside) {
 
-        // First calculate the direction from the rocket's
-        // current centre towards the cursor.
+        // Direction from the rocket centre to the cursor.
         const dx = rocketState.targetX - rocketState.x;
         const dy = rocketState.targetY - rocketState.y;
 
-        // The desired nose direction.
-        const desiredAngle = Math.atan2(dy, dx);
+        // Aim towards the cursor.
+        if (Math.hypot(dx, dy) > 0.5) {
 
-        // Rotate smoothly towards the cursor.
-        const rotationFactor =
-            1 - Math.exp(-CONFIG.rotationSpeed * dt);
+            const desiredAngle = Math.atan2(dy, dx);
 
-        rocketState.angle = smoothAngle(
-            rocketState.angle,
-            desiredAngle,
-            rotationFactor
-        );
+            const rotationFactor =
+                1 - Math.exp(-CONFIG.rotationSpeed * dt);
 
-        // Calculate where the centre needs to be
-        // so that the nose reaches the cursor.
-        const displayAngle =
-            rocketState.angle + CONFIG.svgRotationOffset;
+            rocketState.angle = smoothAngle(
+                rocketState.angle,
+                desiredAngle,
+                rotationFactor
+            );
+        }
 
-        const desiredCentreX =
+        // Calculate the centre position needed to put
+        // the nose at the cursor.
+        const desiredX =
             rocketState.targetX -
-            Math.cos(displayAngle) * CONFIG.noseLength;
+            Math.cos(rocketState.angle) * CONFIG.noseLength;
 
-        const desiredCentreY =
+        const desiredY =
             rocketState.targetY -
-            Math.sin(displayAngle) * CONFIG.noseLength;
+            Math.sin(rocketState.angle) * CONFIG.noseLength;
 
-        // Smoothly move the rocket centre towards that position.
+        const oldX = rocketState.x;
+        const oldY = rocketState.y;
+
+        // Smoothly move the rocket centre.
         const movementFactor =
             1 - Math.exp(-CONFIG.followSpeed * dt);
 
         rocketState.x +=
-            (desiredCentreX - rocketState.x) * movementFactor;
+            (desiredX - rocketState.x) * movementFactor;
 
         rocketState.y +=
-            (desiredCentreY - rocketState.y) * movementFactor;
+            (desiredY - rocketState.y) * movementFactor;
 
-        // Actual rocket velocity.
-        rocketState.vx = (rocketState.x - oldX) / dt;
-        rocketState.vy = (rocketState.y - oldY) / dt;
+        // Correct velocity calculation.
+        rocketState.vx =
+            (rocketState.x - oldX) / dt;
+
+        rocketState.vy =
+            (rocketState.y - oldY) / dt;
 
     } else {
 
-        // Continue travelling with momentum.
+        // Continue moving with momentum.
         rocketState.x += rocketState.vx * dt;
         rocketState.y += rocketState.vy * dt;
 
-        // Gradual space-like friction.
+        // Gradual friction.
         const friction = Math.exp(-CONFIG.coastDrag * dt);
 
         rocketState.vx *= friction;
@@ -343,7 +344,7 @@ function updateRocket(dt) {
             rocketState.vy = 0;
         }
 
-        // Face direction of travel when coasting.
+        // Face direction of travel while coasting.
         const speed = Math.hypot(
             rocketState.vx,
             rocketState.vy
@@ -351,7 +352,7 @@ function updateRocket(dt) {
 
         if (speed > 5) {
 
-            const targetAngle = Math.atan2(
+            const desiredAngle = Math.atan2(
                 rocketState.vy,
                 rocketState.vx
             );
@@ -361,13 +362,13 @@ function updateRocket(dt) {
 
             rocketState.angle = smoothAngle(
                 rocketState.angle,
-                targetAngle,
+                desiredAngle,
                 rotationFactor
             );
         }
     }
 
-    // Keep the rocket within the banner.
+    // Keep rocket within a reasonable range of the banner.
     const margin = CONFIG.noseLength;
 
     rocketState.x = Math.max(
@@ -401,7 +402,7 @@ function fireProjectiles() {
         return;
     }
 
-    // Spawn directly at the calculated rocket nose.
+    // Spawn directly from the rocket nose.
     const nose = getRocketNose();
 
     const angle = rocketState.angle;
@@ -445,6 +446,7 @@ banner.addEventListener("click", fireProjectiles);
 
 function createImpact(x, y, wall) {
 
+    // Create sparks.
     for (
         let i = 0;
         i < CONFIG.impactParticles;
@@ -475,6 +477,7 @@ function createImpact(x, y, wall) {
         });
     }
 
+    // Identify impacted border.
     const side = wall === "horizontal"
         ? (x < width / 2 ? "left" : "right")
         : (y < height / 2 ? "top" : "bottom");
@@ -493,11 +496,13 @@ function updateProjectiles(dt) {
 
         if (!bolt.alive) continue;
 
+        // Move projectile.
         bolt.x += bolt.vx * dt;
         bolt.y += bolt.vy * dt;
 
         bolt.age += dt;
 
+        // Lifetime.
         if (bolt.age >= CONFIG.projectileLifetime) {
             bolt.alive = false;
             continue;
@@ -541,11 +546,13 @@ function updateProjectiles(dt) {
             );
         }
 
+        // Remove after maximum bounces.
         if (bolt.bounces >= CONFIG.maxBounces) {
             bolt.alive = false;
         }
     }
 
+    // Remove dead projectiles.
     for (let i = projectiles.length - 1; i >= 0; i--) {
 
         if (!projectiles[i].alive) {
@@ -632,12 +639,14 @@ function updateParticles(dt) {
 
         particle.life -= dt;
 
+        // Friction.
         const friction = Math.exp(-3 * dt);
 
         particle.vx *= friction;
         particle.vy *= friction;
     }
 
+    // Remove expired particles.
     for (let i = particles.length - 1; i >= 0; i--) {
 
         if (particles[i].life <= 0) {
@@ -787,6 +796,7 @@ function animate(timestamp) {
 
     previousTime = timestamp;
 
+    // Clear canvas.
     ctx.clearRect(
         0,
         0,
@@ -794,12 +804,13 @@ function animate(timestamp) {
         height
     );
 
+    // Update simulation.
     updateRocket(dt);
-
     updateProjectiles(dt);
     updateParticles(dt);
     updateBorderFlash(dt);
 
+    // Render effects.
     drawProjectiles();
     drawParticles();
     drawBorderGlow();
