@@ -36,7 +36,7 @@ const CONFIG = {
     // Horizontal offset in the SVG's LOCAL coordinates.
     // Positive = one side of the rocket.
     // Negative = the opposite side.
-    noseSideOffset: 0,
+    noseSideOffset: 30,
 
     // Momentum
     coastDrag: 0.9,
